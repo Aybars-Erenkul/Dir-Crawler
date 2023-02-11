@@ -12,4 +12,4 @@ Requirements:
   
   2)Requests
 
-*Note: If you want to convert this script into a standalone executable using PyInstaller, you'd need to change the **uic.loadUi("window.ui", self)** to the absolute path of the window.ui such as **uic.loadUi("r'C:\Development\Python\window.ui", self)**. The r prefix makes sure the backslashes are interpreted literally.
+*Note: If you want to convert this script into a standalone executable using PyInstaller, you'd need to change the **uic.loadUi("window.ui", self)** to the absolute path of the window.ui such as **uic.loadUi("r'C:\Development\Python\window.ui", self)**. The r prefix makes sure the backslashes are interpreted literally. *
