@@ -1,10 +1,11 @@
 import requests
-from os.path import join
-from PyQt6.QtCore import Qt
-from PyQt6 import uic
-from PyQt6 import QtWidgets
-#from PyQt6.QtWidgets import *
 import sys
+from os.path import join
+from PyQt6 import uic
+from PyQt6.QtWidgets import *
+from PyQt6.QtCore import QThread, pyqtSignal, QObject, QThreadPool, pyqtSlot
+from threading import Thread
+import time
 
 file_type_dict = {
     '1': 'dir_', 
@@ -20,14 +21,20 @@ word_type_dict = {
     '4': 'extra'
     }
 
-class MyApp(QtWidgets.QMainWindow):
+global Output
+Output = 'jhg'
+
+class MyApp(QMainWindow):
+
     global file_type
     global word_type
+    
 
     def __init__(self):
         super(MyApp, self).__init__()
-        uic.loadUi('window.ui', self)
-        
+
+        uic.loadUi("window.ui", self)
+
         #Define Directory Type Buttons
         self.DirsButton.toggled.connect(self.Dirs_Button)
         self.FilesButton.toggled.connect(self.Files_Button)
@@ -40,100 +47,126 @@ class MyApp(QtWidgets.QMainWindow):
         self.RareButton.toggled.connect(self.Rare_Button)
         self.ExtraButton.toggled.connect(self.Extra_Button)
 
-        self.ScanButton.clicked.connect(self.start_scan)
+        self.OutputList.append('DENEME')
+        self.scanButton = self.findChild(QPushButton, "ScanButton")
+        self.scanButton.clicked.connect(self.start_scan)
 
-        
-    #Directory functions
+    
     def Dirs_Button(self):
         global file_type
         file_type = '1'
     def Files_Button(self):
         global file_type
-        file_type = 2
+        file_type = '2'
     def Php_Button(self):
         global file_type
-        file_type = 3
+        file_type = '3'
     def DirsAndFiles_Button(self):
         global file_type
-        file_type = 4
+        file_type = '4'
 
     #File Functions
     def All_Button(self):
         global word_type
-        word_type = 1
+        word_type = '1'
     def Common_Button(self):
         global word_type
         word_type = '2'
     def Rare_Button(self):
         global word_type
-        word_type = 3
+        word_type = '3'
     def Extra_Button(self):
         global word_type
-        word_type = 4
+        word_type = '4'
 
-    
-
-    #Starting the scan
     def start_scan(self):
+        
         target = self.DomainInput.text()
         if not (target.startswith('http://') or target.startswith('https://')):
             target = 'https://' + target
 
         if not target.endswith('/'):
-            target += '/'        
+            target += '/'   
         construct_path()
-        while True:
-            count = 0
-            save = ''    
-            try:
-                fl = open(file_path, 'r')
-            except:
-                print(f'[+] - Failed to open "{file_path}". Make sure that file exists.\n')
-                continue
-            directory_list = fl.read().strip().splitlines()
-            fl.close()
 
-            print('[+] - Searching started ...\n')
+        self.scan = Worker(target, file_path)
+        self.scan.signal_Output.connect(self.update_output_list)
+        self.scan.start()
+        
 
-            for an_item in directory_list:
-                an_item = an_item.strip()
-                if an_item != '':
-                    link = target + an_item
+    
+    def update_output_list(self, output):
+        print (output)
+        print("update fonksiyonuna da girdi")
+        self.OutputList.append(output)
+        
+
+class Worker(QThread):
+    signal_Output = pyqtSignal(str)
+    signal_end_scan = pyqtSignal(int)
+
+    output = 'Initializing...'
+    def __init__(self, target, file_path):
+        QThread.__init__(self)
+        Worker.target = target
+        Worker.file_path = file_path
+        Worker.output = Output
+
+
+    def run(self):
+        info = "Thread Calisti"
+        print (info)
+        self.signal_Output.emit(info)
+        count = 0
+        save = ''
+        try:
+            fl = open(Worker.file_path, 'r')
+        except:
+            print(f'[+] - Failed to open "{Worker.file_path}". Make sure that file exists.\n')
+            
+        directory_list = fl.read().strip().splitlines()
+        fl.close()
+
+        print('[+] - Searching started ...\n')
+        
+        for an_item in directory_list:
+            an_item = an_item.strip()
+            if an_item != '':
+                def scan_dir():
+                    
+                    link = Worker.target + an_item
                     response = request(link)
                     if response is None:
                         print('[+] - Error, check if domain is reachable.')
-                        break
+                        Worker.output = '[+] - Error, check if domain is reachable.'
+                        self.signal_Output.emit(Worker.output)
+                        return
                     elif response:
                         print(f'\n[+] - Got at - {link} - [{response}]')
-                        output = 'Denemee'
-                        self.OutputList.clear()
-                        self.update_output_list(output)
+                        Worker.output = f'\n[+] - Got at - {link} - [{response}]'
+                        self.signal_Output.emit(Worker.output)
 
-                        count += 1
+                        #count += 1
+                Thread(target=scan_dir).start()             
                         
-            print(f'\n[!] - All done ({count})')   
-
-    def update_output_list(self, output):
-        self.OutputList.append(output)
-        output_list = self.OutputList.toPlainText()
-        output_list = output_list.split()
-        self.OutputList.setPlainText("\n". join(output_list))         
+        print(f'\n[!] - All done ({count})')
+        end = 1
+        self.signal_end_scan.emit(end)   
         
+
+        
+
+
+
+
 def construct_path():
     global file_path
     file_path = join('wordlist', file_type_dict[file_type] + word_type_dict[word_type] + '.wordlist')
 
-def get_ans(qs):
-    while True:
-        ans = input(qs)
-        if ans.lower() == 'y':
-            return True
-        elif ans.lower() == 'n':
-            return False
-
 def request(url):
     try:
         r = requests.get(url)
+        time.sleep(0.5)
         if r.status_code == 404:
             return False
         else:
@@ -143,83 +176,8 @@ def request(url):
         print(e, '\n')
         return None
 
-    
-
-app = QtWidgets.QApplication(sys.argv)
-window = MyApp()
-window.show()
-app.exec()
-
-
-
-
-
-if __name__ == '__main__':
-
-    while True:
-        count = 0
-        save = ''
-
-        print('\n[+] - Enter Target link')
-        target = input('[?] --> ')
-
-        if target == '':
-            continue
-
-        if not (target.startswith('http://') or target.startswith('https://')):
-            target = 'https://' + target
-
-        if not target.endswith('/'):
-            target += '/'
-        
-        print('\n---> Using built-in dictionaries ')
-        while True:
-            print('\n--> Choose dictionary type? ')
-            print('  1. Directory')
-            print('  2. Files')
-            print('  3. Files (PHP)')
-            print('  4. Directory & Files')
-            ans = input('[>] ')
-            if ans in ['1', '2', '3', '4']:
-                file_type = ans
-                break
-            print('--->Invalid option')
-        while True:
-            print('\n--> Choose words type? ')
-            print('  1. All')
-            print('  2. Common')
-            print('  3. Crazy')
-            print('  4. Extra')
-            ans = input('[>] ')
-            if ans in ['1', '2', '3', '4']:
-                word_type = ans
-                break
-        file_path = join('wordlist', file_type_dict[file_type] + word_type_dict[word_type] + '.wordlist')
-            
-        try:
-            fl = open(file_path, 'r')
-        except:
-            print(f'[+] - Failed to open "{file_path}". Make sure that file exists.\n')
-            continue
-        directory_list = fl.read().strip().splitlines()
-        fl.close()
-
-        print('[+] - Searching started ...\n')
-
-        for an_item in directory_list:
-            an_item = an_item.strip()
-            if an_item != '':
-                link = target + an_item
-                response = request(link)
-                if response is None:
-                    print('[+] - Error, check if domain is reachable.')
-                    break
-                elif response:
-                    print(f'\n[+] - Got at - {link} - [{response}]')
-                    count += 1
-                    
-        print(f'\n[!] - All done ({count})')
-
-        if not get_ans('\n[?] - Wanna try again? '):
-            exit(0)
-
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MyApp()
+    window.show()
+    sys.exit(app.exec())
