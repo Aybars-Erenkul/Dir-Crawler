@@ -8,4 +8,5 @@ A GUI Web directory and file scanner written in Python 3.10
 
 Requirements:
   1)PyQt6
+  
   2)Requests
