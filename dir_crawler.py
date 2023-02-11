@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import *
 from PyQt6.QtCore import QThread, pyqtSignal, QObject, QThreadPool, pyqtSlot
 from threading import Thread
 import time
+import webbrowser
 
 file_type_dict = {
     '1': 'dir_', 
@@ -22,7 +23,6 @@ word_type_dict = {
     }
 
 global Output
-Output = 'jhg'
 
 class MyApp(QMainWindow):
 
@@ -46,12 +46,17 @@ class MyApp(QMainWindow):
         self.CommonButton.toggled.connect(self.Common_Button)
         self.RareButton.toggled.connect(self.Rare_Button)
         self.ExtraButton.toggled.connect(self.Extra_Button)
-
-        self.OutputList.append('DENEME')
+        self.CancelButton.clicked.connect(self.cancel_scan)
+        self.CancelButton.setVisible(False)
+        
+        self.commandLinkButton.clicked.connect(self.open_url)
         self.scanButton = self.findChild(QPushButton, "ScanButton")
         self.scanButton.clicked.connect(self.start_scan)
 
-    
+    def open_url(self):
+        browser = webbrowser.get()
+        browser.open_new(self.commandLinkButton.text())
+
     def Dirs_Button(self):
         global file_type
         file_type = '1'
@@ -79,8 +84,14 @@ class MyApp(QMainWindow):
         global word_type
         word_type = '4'
 
+    def cancel_scan(self):
+        global cancel_scan
+        cancel_scan = True
+        self.OutputList.append('\n[+] - Cancelled')
+
     def start_scan(self):
-        
+        self.OutputList.clear()
+        self.CancelButton.setVisible(True)
         target = self.DomainInput.text()
         if not (target.startswith('http://') or target.startswith('https://')):
             target = 'https://' + target
@@ -97,7 +108,7 @@ class MyApp(QMainWindow):
     
     def update_output_list(self, output):
         print (output)
-        print("update fonksiyonuna da girdi")
+        #print("update fonksiyonuna da girdi")
         self.OutputList.append(output)
         
 
@@ -110,13 +121,12 @@ class Worker(QThread):
         QThread.__init__(self)
         Worker.target = target
         Worker.file_path = file_path
-        Worker.output = Output
 
 
     def run(self):
-        info = "Thread Calisti"
-        print (info)
-        self.signal_Output.emit(info)
+        #info = "Thread Calisti"
+        #print (info)
+        #self.signal_Output.emit(info)
         count = 0
         save = ''
         try:
@@ -126,30 +136,38 @@ class Worker(QThread):
             
         directory_list = fl.read().strip().splitlines()
         fl.close()
-
+        global cancel_scan
+        cancel_scan = False
         print('[+] - Searching started ...\n')
+        self.signal_Output.emit('[+] - Searching started ...\n')
         
         for an_item in directory_list:
-            an_item = an_item.strip()
-            if an_item != '':
-                def scan_dir():
-                    
-                    link = Worker.target + an_item
-                    response = request(link)
-                    if response is None:
-                        print('[+] - Error, check if domain is reachable.')
-                        Worker.output = '[+] - Error, check if domain is reachable.'
-                        self.signal_Output.emit(Worker.output)
-                        return
-                    elif response:
-                        print(f'\n[+] - Got at - {link} - [{response}]')
-                        Worker.output = f'\n[+] - Got at - {link} - [{response}]'
-                        self.signal_Output.emit(Worker.output)
-
-                        #count += 1
-                Thread(target=scan_dir).start()             
+            if cancel_scan != True:
+                an_item = an_item.strip()
+                if an_item != '':
+                    def scan_dir():
                         
-        print(f'\n[!] - All done ({count})')
+                        link = Worker.target + an_item
+                        response = request(link)
+                        if response is None:
+                            
+                            print('[+] - Error, check if domain is reachable.')
+                            Worker.output = '[+] - Error, check if domain is reachable.'
+                            self.signal_Output.emit(Worker.output)
+                            return
+                        elif response:
+                            print(f'\n[+] - Got at - {link} - [{response}]')
+                            Worker.output = f'\n[+] - Got at - {link} - [{response}]'
+                            self.signal_Output.emit(Worker.output)
+                            time.sleep(1)
+
+                            #count += 1
+                    time.sleep(0.9)
+                    if (cancel_scan == True):
+                        break 
+                    Thread(target=scan_dir).start()             
+                        
+        print(f'\n[!] - All done')
         end = 1
         self.signal_end_scan.emit(end)   
         
@@ -166,7 +184,7 @@ def construct_path():
 def request(url):
     try:
         r = requests.get(url)
-        time.sleep(0.5)
+        time.sleep(1)
         if r.status_code == 404:
             return False
         else:
