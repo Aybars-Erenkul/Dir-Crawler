@@ -1,4 +1,6 @@
 # DirCrawler
+![Made With Python](http://ForTheBadge.com/images/badges/made-with-python.svg) ![Made with love](http://ForTheBadge.com/images/badges/built-with-love.svg)
+
 A GUI Web directory and file scanner written in Python 3.10
 
 
